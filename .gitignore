@@ -26,3 +26,20 @@ Thumbs.db
 *.db
 *.sqlite
 *.sqlite3
+
+# Coverage
+.coverage
+coverage.xml
+htmlcov/
+pytest.ini.bak
+
+# Test scripts
+run_tests.py
+run_tests.sh
+
+# Backup files
+*.bak
+test_*.bak
+
+# Lock files
+uv.lock

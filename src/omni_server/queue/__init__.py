@@ -25,7 +25,6 @@ class TaskQueueManager:
         )
         db.add(task)
         db.commit()
-        db.refresh(task)
         return task
 
     @staticmethod
@@ -62,7 +61,6 @@ class TaskQueueManager:
             task.assigned_device_id = device_id
             task.updated_at = datetime.utcnow()
             db.commit()
-            db.refresh(task)
 
         return task
 
@@ -74,10 +72,7 @@ class TaskQueueManager:
         if task:
             task.status = status
             task.updated_at = datetime.utcnow()
-            if status in ["success", "failed", "crashed", "timeout"]:
-                task.completed_at = task.updated_at
             db.commit()
-            db.refresh(task)
 
         return task
 
@@ -91,7 +86,6 @@ class TaskQueueManager:
             task.status = result.get("status", "failed")
             task.updated_at = datetime.utcnow()
             db.commit()
-            db.refresh(task)
 
         return task
 
