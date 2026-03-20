@@ -85,26 +85,24 @@ def seed_default_roles(db: Session):
 
     # Check if roles already exist
     existing_roles = db.query(RoleDB).all()
-    if len(existing_roles) > 0:
-        return
+    if len(existing_roles) == 0:
+        # Create default roles only if they don't exist
+        roles = [
+            RoleDB(
+                name="admin",
+                description="Administrator with full access",
+                permissions=["*"],
+            ),
+            RoleDB(
+                name="user",
+                description="Regular user with limited access",
+                permissions=["read", "create"],
+            ),
+        ]
 
-    # Create default roles
-    roles = [
-        RoleDB(
-            name="admin",
-            description="Administrator with full access",
-            permissions=["*"],
-        ),
-        RoleDB(
-            name="user",
-            description="Regular user with limited access",
-            permissions=["read", "create"],
-        ),
-    ]
-
-    for role in roles:
-        db.add(role)
-    db.commit()
+        for role in roles:
+            db.add(role)
+        db.commit()
 
     yield
 
