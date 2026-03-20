@@ -12,12 +12,20 @@ from omni_server.database import get_db
 from omni_server.main import app
 from omni_server.models import Base
 
+# Import all models to ensure they're registered with SQLAlchemy's metadata
+import omni_server.models
+
 # Store original engine to restore after tests
 orig_engine = db_module.engine
 orig_SessionLocal = db_module.SessionLocal
 
-# Use in-memory SQLite for testing
-TEST_DATABASE_URL = "sqlite:///:memory:"
+# Use file-based SQLite for testing (more reliable than in-memory for shared access)
+import tempfile
+import os
+
+temp_db_file = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
+temp_db_file.close()
+TEST_DATABASE_URL = f"sqlite:///{temp_db_file.name}"
 
 test_engine = create_engine(
     TEST_DATABASE_URL, connect_args={"check_same_thread": False}, echo=False
@@ -42,15 +50,17 @@ def teardown_test_db():
 def test_db_setup():
     """Setup and teardown test database for all tests."""
     setup_test_db()
-    Base.metadata.create_all(bind=test_engine)
+    # Tables are now created in the client fixture to ensure they exist before use
     yield
-    Base.metadata.drop_all(bind=test_engine)
     teardown_test_db()
 
 
 @pytest.fixture(scope="function")
 def db() -> Generator[Session, None, None]:
     """Create a fresh database session for each test."""
+    # Create tables first before creating the session
+    Base.metadata.create_all(bind=test_engine)
+
     session = TestingSessionLocal()
     try:
         yield session
@@ -68,20 +78,35 @@ def db() -> Generator[Session, None, None]:
         session.close()
 
 
-@pytest.fixture(scope="function")
-def client(db: Session) -> Generator[TestClient, None, None]:
-    """Create a test client with database dependency override."""
+@pytest.fixture(scope="function", autouse=True)
+def seed_default_roles(db: Session):
+    """Seed default roles into the database for tests."""
+    from omni_server.models import RoleDB
 
-    def override_get_db() -> Generator[Session, None, None]:
-        """Override to use the test database session."""
-        yield db
+    # Check if roles already exist
+    existing_roles = db.query(RoleDB).all()
+    if len(existing_roles) > 0:
+        return
 
-    app.dependency_overrides[get_db] = override_get_db
-    try:
-        with TestClient(app) as api_client:
-            yield api_client
-    finally:
-        app.dependency_overrides.clear()
+    # Create default roles
+    roles = [
+        RoleDB(
+            name="admin",
+            description="Administrator with full access",
+            permissions=["*"],
+        ),
+        RoleDB(
+            name="user",
+            description="Regular user with limited access",
+            permissions=["read", "create"],
+        ),
+    ]
+
+    for role in roles:
+        db.add(role)
+    db.commit()
+
+    yield
 
 
 @pytest.fixture(scope="function")
@@ -91,8 +116,7 @@ def client(db: Session) -> Generator[TestClient, None, None]:
     This ensures the database tables are created before the client is used,
     and the client uses the same database session as the db fixture.
     """
-    # Create database tables for the test client
-    Base.metadata.create_all(bind=test_engine)
+    # Tables are already created in the db fixture
 
     def override_get_db() -> Generator[Session, None, None]:
         """Override to use the test database session."""
@@ -131,6 +155,31 @@ def sample_task_manifest():
             }
         ],
     }
+
+
+@pytest.fixture
+def auth_headers(client):
+    """Create and return authentication headers for a test user.
+
+    This fixture registers a new user, logs them in, and returns
+    the auth headers that can be used for authenticated API calls.
+    """
+    # Register a user
+    user_data = {
+        "username": "authuser",
+        "email": "authuser@example.com",
+        "password": "AuthPass123",
+    }
+    client.post("/api/auth/register", json=user_data)
+
+    # Login to get tokens
+    login_response = client.post(
+        "/api/auth/login", json={"identifier": "authuser", "password": "AuthPass123"}
+    )
+    access_token = login_response.json()["access_token"]
+
+    # Return headers
+    return {"Authorization": f"Bearer {access_token}"}
 
 
 @pytest.fixture
