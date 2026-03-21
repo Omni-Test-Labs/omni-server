@@ -208,6 +208,35 @@ class DeviceHeartbeatDB(Base):
     last_seen = Column(DateTime, default=datetime.utcnow, index=True)
 
 
+class TaskDependencyDB(Base):
+    """Database model for task dependencies."""
+
+    __tablename__ = "task_dependencies"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id_one = Column(Integer, ForeignKey("task_queue.id"), index=True, nullable=False)
+    task_id_two = Column(Integer, ForeignKey("task_queue.id"), index=True, nullable=False)
+    dependency_type = Column(String, nullable=False)  # 'after_complete', 'after_start'
+    status = Column(String, default="active", nullable=False)  # 'active', 'resolved', 'skipped'
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    resolved_at = Column(DateTime, nullable=True)
+
+
+class DeviceLockDB(Base):
+    """Database model for device resource locks."""
+
+    __tablename__ = "device_locks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(String, index=True, nullable=False)
+    task_id = Column(Integer, ForeignKey("task_queue.id"), index=True, nullable=False)
+    status = Column(String, default="locked", nullable=False)  # 'locked', 'acquired', 'released'
+    lock_timeout_seconds = Column(Integer, default=300, nullable=False)
+    acquired_at = Column(DateTime, default=datetime.utcnow, nullable=True)
+    released_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
 # ============================================
 # User and Authentication Models
 # ============================================
