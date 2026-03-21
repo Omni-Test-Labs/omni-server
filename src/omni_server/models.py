@@ -169,7 +169,7 @@ class Heartbeat(BaseModel):
 # Database Models (SQLAlchemy)
 
 
-from sqlalchemy import Column, DateTime, Float, Integer, String, Text, JSON
+from sqlalchemy import Column, DateTime, Float, Integer, String, Text, JSON, Boolean, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -206,3 +206,174 @@ class DeviceHeartbeatDB(Base):
     capabilities = Column(JSON, nullable=False)
     runner_version = Column(String, nullable=False)
     last_seen = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+# ============================================
+# User and Authentication Models
+# ============================================
+
+
+class UserDB(Base):
+    """Database model for users."""
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    github_id = Column(String, unique=True, index=True, nullable=True)
+    gitlab_id = Column(String, unique=True, index=True, nullable=True)
+    avatar_url = Column(String, nullable=True)
+    role_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
+    is_active = Column(Boolean, default=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class RoleDB(Base):
+    """Database model for user roles."""
+
+    __tablename__ = "roles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False)
+    description = Column(Text, nullable=True)
+    permissions = Column(JSON, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class PermissionDB(Base):
+    """Database model for permissions."""
+
+    __tablename__ = "permissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False)
+    description = Column(Text, nullable=True)
+    resource_type = Column(String, index=True, nullable=False)  # device, task, application, setting
+    action = Column(String, nullable=True)  # create, read, update, delete
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class UserSettingsDB(Base):
+    """Database model for user preferences."""
+
+    __tablename__ = "user_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    preferences = Column(JSON, nullable=False)
+    theme = Column(String, default="light")
+    language = Column(String, default="en")
+    notification_email = Column(Boolean, default=True)
+    notification_web = Column(Boolean, default=True)
+    timezone = Column(String, default="UTC")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class NotificationDB(Base):
+    """Database model for user notifications."""
+
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    type = Column(String, index=True, nullable=False)  # info, success, warning, error
+    title = Column(String, nullable=False)
+    message = Column(Text, nullable=False)
+    read = Column(Boolean, default=False, index=True)
+    link_url = Column(String, nullable=True)
+    meta_data = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class AuditLogDB(Base):
+    """Database model for audit logging."""
+
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=True)
+    action = Column(String, nullable=False)
+    entity_type = Column(String, index=True, nullable=False)
+    entity_id = Column(String, index=True, nullable=True)
+    details = Column(JSON, nullable=False)
+    ip_address = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+# ============================================
+# Test Management Models
+# ============================================
+
+
+class TestApplicationDB(Base):
+    """Database model for test applications (SUTs)."""
+
+    __tablename__ = "test_applications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    type = Column(String, index=True, nullable=False)  # web, mobile, hardware, api, iot
+    version = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
+    config = Column(JSON, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AppEnvironmentDB(Base):
+    """Database model for application environments."""
+
+    __tablename__ = "app_environments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    app_id = Column(Integer, ForeignKey("test_applications.id"), index=True, nullable=False)
+    name = Column(String, nullable=False)
+    type = Column(String, index=True, nullable=False)  # development, testing, staging, production
+    config = Column(JSON, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ============================================
+# System Configuration Models
+# ============================================
+
+
+class SystemSettingDB(Base):
+    """Database model for global system settings."""
+
+    __tablename__ = "system_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, index=True, nullable=False)
+    value = Column(Text, nullable=False)
+    category = Column(
+        String, index=True, nullable=False
+    )  # general, auth, notification, api, service
+    description = Column(Text, nullable=True)
+    is_public = Column(Boolean, default=False)  # whether frontend can read
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ServiceHealthDB(Base):
+    """Database model for service health monitoring."""
+
+    __tablename__ = "service_health"
+
+    id = Column(Integer, primary_key=True, index=True)
+    service_name = Column(String, unique=True, index=True, nullable=False)
+    status = Column(String, index=True, nullable=False)  # healthy, unhealthy, degraded
+    last_check = Column(DateTime, default=datetime.utcnow, index=True)
+    uptime_seconds = Column(Float, default=0.0)
+    error_message = Column(Text, nullable=True)
+    details = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
