@@ -23,6 +23,16 @@ orig_SessionLocal = db_module.SessionLocal
 import tempfile
 import os
 
+from omni_server.config import Settings
+
+# Set up OAuth config for testing
+os.environ["GITHUB_CLIENT_ID"] = "test_github_client_id"
+os.environ["GITHUB_CLIENT_SECRET"] = "test_github_secret"
+os.environ["GITHUB_REDIRECT_URI"] = "http://localhost:3000/auth/github/callback"
+os.environ["GITLAB_CLIENT_ID"] = "test_gitlab_client_id"
+os.environ["GITLAB_CLIENT_SECRET"] = "test_gitlab_secret"
+os.environ["GITLAB_REDIRECT_URI"] = "http://localhost:3000/auth/gitlab/callback"
+
 temp_db_file = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
 temp_db_file.close()
 TEST_DATABASE_URL = f"sqlite:///{temp_db_file.name}"
@@ -68,7 +78,6 @@ def db() -> Generator[Session, None, None]:
         try:
             session.commit()
         except Exception:
-            # If commit fails (e.g., due to rollback), just ignore
             pass
     finally:
         try:
@@ -76,6 +85,16 @@ def db() -> Generator[Session, None, None]:
         except Exception:
             pass
         session.close()
+
+
+@pytest.fixture(scope="function")
+def test_db(db: Session) -> Session:
+    return db
+
+
+@pytest.fixture(scope="function")
+def db_session(db: Session) -> Session:
+    return db
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -178,6 +197,53 @@ def auth_headers(client):
 
     # Return headers
     return {"Authorization": f"Bearer {access_token}"}
+
+
+@pytest.fixture
+def test_user(db: Session, client: TestClient) -> dict:
+    """Create test user with access token for authenticated tests."""
+    from omni_server.models import UserDB, RoleDB
+    from omni_server.auth.service import AuthService
+
+    role = db.query(RoleDB).filter(RoleDB.name == "user").first()
+    if not role:
+        role = RoleDB(
+            name="user",
+            description="Regular user with limited access",
+            permissions=["read", "create"],
+        )
+        db.add(role)
+        db.commit()
+        db.refresh(role)
+
+    auth_service = AuthService(Settings())
+    user = UserDB(
+        username="testuser",
+        email="testuser@example.com",
+        hashed_password=auth_service.hash_password("TestPass123"),
+        role_id=role.id,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    role_id = int(role.id) if not isinstance(role.id, int) else role.id
+    user_id = int(user.id) if not isinstance(user.id, int) else user.id
+    username = str(user.username) if not isinstance(user.username, str) else user.username
+
+    access_token = auth_service.create_access_token(
+        user_id=user_id,
+        username=username,
+        role_id=role_id,
+    )
+
+    return {
+        "id": user_id,
+        "username": username,
+        "email": str(user.email),
+        "role_id": role_id,
+        "access_token": access_token,
+    }
 
 
 @pytest.fixture
