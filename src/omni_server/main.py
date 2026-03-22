@@ -19,6 +19,11 @@ settings = Settings()
 async def lifespan(app: FastAPI):
     """Initialize database on startup."""
     init_db()
+
+    from omni_server.queue import init_rca_config, _config_cache as queue_config_cache
+
+    init_rca_config(settings)
+
     yield
 
 

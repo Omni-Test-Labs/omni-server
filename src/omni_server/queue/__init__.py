@@ -1,12 +1,46 @@
 """Queue manager for task dispatch and management."""
 
+import asyncio
+import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
+from omni_server.config import Settings
 from omni_server.models import TaskQueueDB, TaskStatus
+
+logger = logging.getLogger(__name__)
+
+_config_cache = None
+
+
+def init_rca_config(config: Settings) -> None:
+    """Initialize RCA configuration for auto-trigger on task failure."""
+    global _config_cache
+    _config_cache = config
+
+    if config.rca_enabled and config.auto_rca_on_failure:
+        logger.info("RCA auto-trigger on task failure is enabled")
+    else:
+        logger.debug("RCA auto-trigger on task failure is disabled")
+
+
+async def trigger_rca_analysis(task_id: str, db: Session) -> None:
+    """Trigger RCA analysis for a failed task."""
+    from omni_server.ai import RCAnalysisService
+
+    config = _config_cache or Settings()
+    if not config.rca_enabled or not config.auto_rca_on_failure:
+        return
+
+    try:
+        rca_service = RCAnalysisService(config)
+        await rca_service.analyze_task(db, task_id, force_refresh=True)
+        logger.info(f"RCA analysis completed for task {task_id}")
+    except Exception as e:
+        logger.error(f"Failed to trigger RCA analysis for task {task_id}: {e}")
 
 
 class TaskQueueManager:
@@ -86,6 +120,18 @@ class TaskQueueManager:
             task.status = result.get("status", "failed")
             task.updated_at = datetime.utcnow()
             db.commit()
+
+            if task.status == "failed":
+                config = _config_cache or Settings()
+                if config.auto_rca_on_failure:
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            asyncio.create_task(trigger_rca_analysis(task_id, db))
+                        else:
+                            loop.run_until_complete(trigger_rca_analysis(task_id, db))
+                    except RuntimeError:
+                        logger.warning(f"No event loop available for task {task_id}, skipping RCA")
 
         return task
 
