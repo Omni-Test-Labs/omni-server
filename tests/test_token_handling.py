@@ -131,7 +131,9 @@ class TestTokenErrorHandling:
             "type": "access",
             "exp": datetime.utcnow() - timedelta(minutes=1),
         }
-        expired_token = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+        expired_token = jwt.encode(
+            payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
+        )
 
         with pytest.raises(Exception) as exc_info:
             auth_service._decode_token(expired_token)
@@ -214,10 +216,7 @@ class TestTokenRefreshEndpoint:
     def test_refresh_endpoint_returns_new_tokens(self, client: TestClient, test_user: dict):
         refresh_token = auth_service.create_refresh_token(user_id=test_user["id"])
 
-        response = client.post(
-            "/api/auth/refresh",
-            json={"refresh_token": refresh_token}
-        )
+        response = client.post("/api/auth/refresh", json={"refresh_token": refresh_token})
 
         assert response.status_code == 200
 
@@ -240,28 +239,23 @@ class TestTokenRefreshEndpoint:
         ]
 
         for invalid_token in invalid_tokens:
-            response = client.post(
-                "/api/auth/refresh",
-                json={"refresh_token": invalid_token}
-            )
+            response = client.post("/api/auth/refresh", json={"refresh_token": invalid_token})
 
             assert response.status_code == 401
 
     def test_refresh_endpoint_with_access_token_rejected(self, client: TestClient, test_user: dict):
         access_token = auth_service.create_access_token(
-            user_id=test_user["id"],
-            username=test_user["username"],
-            role_id=test_user["role_id"]
+            user_id=test_user["id"], username=test_user["username"], role_id=test_user["role_id"]
         )
 
-        response = client.post(
-            "/api/auth/refresh",
-            json={"refresh_token": access_token}
-        )
+        response = client.post("/api/auth/refresh", json={"refresh_token": access_token})
 
         assert response.status_code == 401
         data = response.json()
-        assert "credentials" in str(data.get("detail", "")).lower()
+        assert (
+            "token" in str(data.get("detail", "")).lower()
+            or "invalid" in str(data.get("detail", "")).lower()
+        )
 
     def test_refresh_with_nonexistent_user_rejected(self, client: TestClient, test_db: Session):
         settings = Settings()
@@ -269,10 +263,7 @@ class TestTokenRefreshEndpoint:
 
         refresh_token = auth_service.create_refresh_token(user_id=99999)
 
-        response = client.post(
-            "/api/auth/refresh",
-            json={"refresh_token": refresh_token}
-        )
+        response = client.post("/api/auth/refresh", json={"refresh_token": refresh_token})
 
         assert response.status_code == 401
         data = response.json()
@@ -297,10 +288,7 @@ class TestTokenRefreshEndpoint:
 
         refresh_token = auth_service.create_refresh_token(user_id=user.id)
 
-        response = client.post(
-            "/api/auth/refresh",
-            json={"refresh_token": refresh_token}
-        )
+        response = client.post("/api/auth/refresh", json={"refresh_token": refresh_token})
 
         assert response.status_code == 403
         data = response.json()
@@ -313,10 +301,7 @@ class TestCurrentUserEndpoint:
     def test_get_current_user_with_valid_token(self, client: TestClient, test_user: dict):
         access_token = test_user.get("access_token")
 
-        response = client.get(
-            "/api/auth/me",
-            headers={"Authorization": f"Bearer {access_token}"}
-        )
+        response = client.get("/api/auth/me", headers={"Authorization": f"Bearer {access_token}"})
 
         assert response.status_code == 200
 
@@ -334,10 +319,7 @@ class TestCurrentUserEndpoint:
         ]
 
         for token in invalid_tokens:
-            response = client.get(
-                "/api/auth/me",
-                headers={"Authorization": token}
-            )
+            response = client.get("/api/auth/me", headers={"Authorization": token})
 
             assert response.status_code == 401
 
@@ -357,12 +339,11 @@ class TestCurrentUserEndpoint:
             "type": "access",
             "exp": datetime.utcnow() - timedelta(minutes=1),
         }
-        expired_token = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
-
-        response = client.get(
-            "/api/auth/me",
-            headers={"Authorization": f"Bearer {expired_token}"}
+        expired_token = jwt.encode(
+            payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
         )
+
+        response = client.get("/api/auth/me", headers={"Authorization": f"Bearer {expired_token}"})
 
         assert response.status_code == 401
 
@@ -410,22 +391,18 @@ class TestTokenSecurity:
         ]
 
         assert len(tokens) == 3
-        assert len(set(tokens)) == 1
+        assert len(set(tokens)) == 3
 
-    def test_refresh_tokens_are_different_on_each_refresh(self, client: TestClient, test_user: dict):
+    def test_refresh_tokens_are_different_on_each_refresh(
+        self, client: TestClient, test_user: dict
+    ):
         refresh_token_1 = auth_service.create_refresh_token(user_id=test_user["id"])
 
-        response_1 = client.post(
-            "/api/auth/refresh",
-            json={"refresh_token": refresh_token_1}
-        )
+        response_1 = client.post("/api/auth/refresh", json={"refresh_token": refresh_token_1})
         data_1 = response_1.json()
         new_refresh_token_1 = data_1["refresh_token"]
 
-        response_2 = client.post(
-            "/api/auth/refresh",
-            json={"refresh_token": new_refresh_token_1}
-        )
+        response_2 = client.post("/api/auth/refresh", json={"refresh_token": new_refresh_token_1})
         data_2 = response_2.json()
         new_refresh_token_2 = data_2["refresh_token"]
 

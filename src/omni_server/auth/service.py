@@ -43,10 +43,9 @@ class AuthService:
     def _create_token(
         self, data: dict, expires_delta: timedelta, secret: str, algorithm: str
     ) -> str:
-        """Create a JWT token with expiration."""
         to_encode = data.copy()
-        expire = datetime.utcnow() + expires_delta
-        to_encode.update({"exp": expire})
+        now = datetime.utcnow()
+        to_encode.update({"iat": now.timestamp(), "exp": now + expires_delta})
         encoded_jwt = jwt.encode(to_encode, secret, algorithm=algorithm)
         return encoded_jwt
 
