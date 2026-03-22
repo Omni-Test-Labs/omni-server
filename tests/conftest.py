@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 import omni_server.database as db_module
 from omni_server.database import get_db
 from omni_server.main import app
-from omni_server.models import Base
+from omni_server.models import Base, TaskQueueDB, DeviceHeartbeatDB, UserDB, UserSettingsDB, RoleDB
 
 # Import all models to ensure they're registered with SQLAlchemy's metadata
 import omni_server.models
@@ -81,7 +81,11 @@ def db() -> Generator[Session, None, None]:
             pass
     finally:
         try:
-            session.rollback()
+            session.execute(TaskQueueDB.__table__.delete())
+            session.execute(DeviceHeartbeatDB.__table__.delete())
+            session.execute(UserDB.__table__.delete())
+            session.execute(UserSettingsDB.__table__.delete())
+            session.commit()
         except Exception:
             pass
         session.close()
