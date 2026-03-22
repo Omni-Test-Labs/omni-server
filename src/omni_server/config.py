@@ -52,3 +52,19 @@ class Settings(BaseSettings):
     gitlab_client_id: str = ""
     gitlab_client_secret: str = ""
     gitlab_redirect_uri: str = "http://localhost:3000/auth/gitlab/callback"
+
+    # AI RCA Configuration
+    rca_enabled: bool = False
+    auto_rca_on_failure: bool = False
+    llm_provider: str = "openai"  # openai, anthropic, ollama
+    llm_model: str = "gpt-4o-mini"
+    llm_api_key: str = ""
+    llm_base_url: str = ""  # For alternative providers
+    llm_fallback_provider: str = "anthropic"
+    llm_fallback_model: str = "claude-3-5-sonnet-20241022"
+    llm_fallback_api_key: str = ""
+    rca_system_prompt: str = ""
+    max_rca_per_hour: int = 100
+    rca_cache_ttl_seconds: int = 86400  # 24 hours
+    max_tokens_per_request: int = 4000
+    enable_rca_cache: bool = True

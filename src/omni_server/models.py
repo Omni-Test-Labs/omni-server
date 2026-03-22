@@ -171,6 +171,7 @@ class Heartbeat(BaseModel):
 
 from sqlalchemy import Column, DateTime, Float, Integer, String, Text, JSON, Boolean, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
 
 Base = declarative_base()
 
@@ -191,6 +192,9 @@ class TaskQueueDB(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     result = Column(JSON, nullable=True)
 
+    # Relationships
+    rca_result = relationship("TaskRCADB", back_populates="task", uselist=False)
+
 
 class DeviceHeartbeatDB(Base):
     """Database model for device heartbeats."""
@@ -206,6 +210,39 @@ class DeviceHeartbeatDB(Base):
     capabilities = Column(JSON, nullable=False)
     runner_version = Column(String, nullable=False)
     last_seen = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class TaskRCADB(Base):
+    """Database model for Root Cause Analysis (RCA) results."""
+
+    __tablename__ = "task_rca"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(String, unique=True, index=True, nullable=False)
+
+    # Analysis metadata
+    analyzed_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    llm_provider = Column(String, nullable=False)
+    llm_model = Column(String, nullable=False)
+    duration_seconds = Column(Float, nullable=False)
+
+    # Token usage for cost tracking
+    input_tokens = Column(Integer, nullable=False)
+    output_tokens = Column(Integer, nullable=False)
+    total_tokens = Column(Integer, nullable=False)
+
+    # RCA results (stored as JSON)
+    root_cause = Column(Text, nullable=False)
+    confidence = Column(Float, nullable=False)
+    severity = Column(String, nullable=False)  # 'low', 'medium', 'high', 'critical'
+    findings = Column(JSON, nullable=False)
+    recommendations = Column(JSON, nullable=False)
+    related_patterns = Column(JSON, nullable=False)
+    next_steps = Column(JSON, nullable=False)
+
+    # Caching
+    cache_hit = Column(Boolean, default=False, nullable=False)
+    expires_at = Column(DateTime, nullable=True)
 
 
 class TaskDependencyDB(Base):
