@@ -5,9 +5,15 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from omni_server.ai import RCAnalysisService
+from omni_server.config import Settings
 from omni_server.database import get_db
 from omni_server.models import ExecutionResult, TaskManifest
 from omni_server.queue import TaskQueueManager
+
+router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
+
+_settings = Settings()
 
 router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
 
@@ -104,3 +110,83 @@ async def record_result(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
     return {"task_id": task.task_id, "status": task.status}
+
+
+@router.get("/{task_id}/rca", response_model=dict)
+async def get_rca_analysis(
+    task_id: str,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Get RCA analysis results for a task."""
+    if not _settings.rca_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="RCA analysis is disabled",
+        )
+
+    task = TaskQueueManager.get_task_by_id(db, task_id)
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    rca_service = RCAnalysisService(_settings)
+    result = await rca_service.analyze_task(db, task_id, force_refresh=False)
+
+    return {
+        "task_id": task_id,
+        "rca": result.to_dict(),
+    }
+
+
+@router.post("/{task_id}/rca", response_model=dict)
+async def trigger_rca_analysis(
+    task_id: str,
+    force_refresh: bool = False,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Trigger RCA analysis for a task."""
+    if not _settings.rca_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="RCA analysis is disabled",
+        )
+
+    task = TaskQueueManager.get_task_by_id(db, task_id)
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    rca_service = RCAnalysisService(_settings)
+    result = await rca_service.analyze_task(db, task_id, force_refresh=force_refresh)
+
+    return {
+        "task_id": task_id,
+        "rca": result.to_dict(),
+    }
+
+
+@router.get("/{task_id}/rca/status", response_model=dict)
+async def get_rca_status(
+    task_id: str,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Check if RCA analysis is available for a task."""
+    if not _settings.rca_enabled:
+        return {"rca_enabled": False, "rca_available": False}
+
+    from omni_server.models import TaskRCADB
+
+    task = TaskQueueManager.get_task_by_id(db, task_id)
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    rca_db = db.query(TaskRCADB).filter(TaskRCADB.task_id == task_id).first()
+    if rca_db and rca_db.cache_hit:
+        return {
+            "rca_enabled": True,
+            "rca_available": True,
+            "analyzed_at": rca_db.analyzed_at.isoformat() if rca_db.analyzed_at else None,
+        }
+
+    return {
+        "rca_enabled": True,
+        "rca_available": False,
+    }
