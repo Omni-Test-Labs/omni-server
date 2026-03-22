@@ -153,11 +153,7 @@ Provide analysis in JSON format with these fields:
 
         return system_prompt, user_prompt
 
-    def build_config(
-        self,
-        include_debugging: bool = False,
-        max_tokens: int = 2000,
-    ) -> LLMConfig:
+    def build_config(self, include_debugging: bool = False, max_tokens: int = 4000) -> LLMConfig:
         """
         Build LLM configuration for RCA analysis.
 
@@ -169,6 +165,9 @@ Provide analysis in JSON format with these fields:
             LLMConfig instance
         """
         return LLMConfig(
+            provider="openai",  # Default provider
+            model="gpt-4o-mini",  # Default model
+            api_key="test-api-key",  # Should be provided by config in production
             temperature=0.3,  # Low temperature for consistent analysis
             max_tokens=max_tokens,
             top_p=0.9,

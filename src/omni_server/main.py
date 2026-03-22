@@ -43,8 +43,8 @@ app.add_middleware(
 )
 
 app.include_router(tasks.router)
-app.include_router(devices.router)
 app.include_router(dependencies.router)
+app.include_router(devices.router)
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(audit_router)

@@ -3,7 +3,7 @@
 from omni_server.ai.llm_client import BaseLLMClient, LLMConfig, LLMResponse
 from omni_server.ai.openai_client import OpenAIClient
 from omni_server.ai.context_extractor import RCAContextExtractor
-from omni_server.ai.rca_prompt_builder import RCAPromptBuilder
+from omni_server.ai.rca_prompt_builder import RCAPromptBuilder, RCAContext
 from omni_server.ai.rca_service import RCAnalysisService, RCAResult
 
 __all__ = [
@@ -12,6 +12,7 @@ __all__ = [
     "LLMResponse",
     "OpenAIClient",
     "RCAContextExtractor",
+    "RCAContext",
     "RCAPromptBuilder",
     "RCAnalysisService",
     "RCAResult",

@@ -149,23 +149,31 @@ class RCAContextExtractor:
         """Extract error logs and artifacts from task result."""
         result = task.result if task.result else {}
 
-        # Extract logs
+        # Extract logs from result directly or from nested artifacts
         logs = []
         if result.get("logs"):
             logs.extend(result["logs"])
+        elif result.get("artifacts") and isinstance(result["artifacts"], dict):
+            logs.extend(result["artifacts"].get("logs", []))
 
         # Extract file artifacts
         files = []
         if result.get("artifacts"):
-            for artifact in result.get("artifacts", []):
-                files.append(
-                    {
-                        "name": artifact.get("name", "unknown"),
-                        "type": artifact.get("type", "unknown"),
-                        "size": artifact.get("size", 0),
-                        "location": artifact.get("location", ""),
-                    }
-                )
+            artifacts = result["artifacts"]
+            # Handle artifacts as dict with "files" key
+            if isinstance(artifacts, dict):
+                files.extend(artifacts.get("files", []))
+            # Handle artifacts as list of file objects
+            elif isinstance(artifacts, list):
+                for artifact in artifacts:
+                    files.append(
+                        {
+                            "name": artifact.get("name", "unknown"),
+                            "type": artifact.get("type", "unknown"),
+                            "size": artifact.get("size", 0),
+                            "location": artifact.get("location", ""),
+                        }
+                    )
 
         return {
             "logs": logs,

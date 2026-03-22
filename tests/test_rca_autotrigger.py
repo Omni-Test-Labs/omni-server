@@ -1,4 +1,4 @@
-Tests for auto-trigger RCA on task failures.
+# Tests for auto-trigger RCA on task failures.
 
 import json
 from unittest.mock import AsyncMock, patch, MagicMock
@@ -16,6 +16,7 @@ class TestRCAAutoTrigger:
     def reset_rate_limit_cache(self):
         """Reset rate limit cache before each test."""
         from omni_server.ai.rca_service import _rate_limit_cache
+
         _rate_limit_cache.clear()
         yield
         _rate_limit_cache.clear()
@@ -32,6 +33,7 @@ class TestRCAAutoTrigger:
             llm_api_key="test-key",
         )
         from omni_server.queue import init_rca_config
+
         init_rca_config(settings)
 
         # Mock RCA service
@@ -71,6 +73,7 @@ class TestRCAAutoTrigger:
             llm_api_key="test-key",
         )
         from omni_server.queue import init_rca_config
+
         init_rca_config(settings)
 
         # Create and record crashed task
@@ -104,6 +107,7 @@ class TestRCAAutoTrigger:
             llm_api_key="test-key",
         )
         from omni_server.queue import init_rca_config
+
         init_rca_config(settings)
 
         # Create and record timeout task
@@ -136,6 +140,7 @@ class TestRCAAutoTrigger:
             llm_api_key="test-key",
         )
         from omni_server.queue import init_rca_config
+
         init_rca_config(settings)
 
         # Mock RCA service to verify it's NOT called
@@ -164,13 +169,14 @@ class TestRCAAutoTrigger:
         """Test RCA is NOT triggered when rca_enabled=False."""
         # Setup RCA config with RCA fully disabled
         settings = Settings(
-            rca_enabled=False,  RCA disabled
+            rca_enabled=False,  # RCA disabled
             auto_rca_on_failure=True,
             llm_provider="openai",
             llm_model="gpt-4o-mini",
             llm_api_key="test-key",
         )
         from omni_server.queue import init_rca_config
+
         init_rca_config(settings)
 
         # Mock RCA service to verify it's NOT called
@@ -207,6 +213,7 @@ class TestRCAAutoTrigger:
             llm_api_key="test-key",
         )
         from omni_server.queue import init_rca_config
+
         init_rca_config(settings)
 
         # Mock RCA service to verify it's NOT called
@@ -242,6 +249,7 @@ class TestRCAAutoTrigger:
             llm_api_key="test-key",
         )
         from omni_server.queue import init_rca_config
+
         init_rca_config(settings)
 
         # Create and record failed task
@@ -280,10 +288,12 @@ class TestRCAAutoTrigger:
 
         # Initialize config
         from omni_server.queue import init_rca_config
+
         init_rca_config(settings)
 
         # Verify config is cached
         from omni_server.queue import _config_cache
+
         assert _config_cache is not None
         assert _config_cache.rca_enabled is True
         assert _config_cache.auto_rca_on_failure is True
@@ -299,10 +309,12 @@ class TestRCAAutoTrigger:
         )
 
         from omni_server.queue import init_rca_config
+
         # Should initialize without error, log shows auto-trigger disabled
         init_rca_config(settings)
 
         from omni_server.queue import _config_cache
+
         assert _config_cache is not None
         assert _config_cache.auto_rca_on_failure is False
 
@@ -318,6 +330,7 @@ class TestRCAAutoTrigger:
             max_rca_per_hour=100,
         )
         from omni_server.queue import init_rca_config
+
         init_rca_config(settings)
 
         # Create multiple failed tasks

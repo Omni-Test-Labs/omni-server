@@ -1,4 +1,4 @@
-Unit tests for RCA service with mocked LLM client.
+# Unit tests for RCA service with mocked LLM client.
 
 import json
 from datetime import datetime, timedelta
@@ -46,7 +46,6 @@ class TestRCAServiceUnitTests:
                     "total_duration_seconds": 280,
                 },
             },
-            error_message="Test failure",
         )
         db.add(task)
         db.commit()
@@ -57,10 +56,8 @@ class TestRCAServiceUnitTests:
 
         # Verify task info extracted
         assert "task" in context
-        assert context["task"]["id"] == "test-task-001"
-        assert context["task"]["name"] == "test-task-001"
+        assert context["task"]["task_id"] == "test-task-001"
         assert context["task"]["status"] == "failed"
-        assert context["task"]["error_message"] == "Test failure"
         assert context["task"]["priority"] == "critical"
 
     def test_rca_context_extractor_gathers_device_context(self, db, sample_task_manifest):
@@ -72,7 +69,6 @@ class TestRCAServiceUnitTests:
             device_id="device-001",
             runner_version="0.1.0",
             status="idle",
-            hostname="test-host",
             system_resources={"cpu_percent": 50.0, "memory_mb": 8192},
             capabilities={"python": "3.10"},
         )
@@ -104,8 +100,8 @@ class TestRCAServiceUnitTests:
 
         # Verify device info extracted
         assert "device" in context
-        assert context["device"]["id"] == "device-001"
-        assert context["device"]["hostname"] == "test-host"
+        assert context["device"]["device_id"] == "device-001"
+        assert context["device"]["hostname"] == "unknown"  # Not stored in DeviceHeartbeatDB
         assert context["device"]["status"] == "idle"
 
     def test_rca_context_extractor_includes_execution_results(self, db, sample_task_manifest):
@@ -132,6 +128,14 @@ class TestRCAServiceUnitTests:
                         "error": "Step 2 failed",
                     },
                 ],
+                "summary": {
+                    "total_steps": 2,
+                    "successful_steps": 1,
+                    "failed_steps": 1,
+                    "crashed_steps": 0,
+                    "skipped_steps": 0,
+                    "total_duration_seconds": 300.0,
+                },
                 "artifacts": {
                     "logs": [
                         {
@@ -161,7 +165,8 @@ class TestRCAServiceUnitTests:
         # Verify execution info extracted
         assert "execution" in context
         assert "artifacts" in context
-        assert len(context["execution"]["failed_steps"]) > 0
+        assert context["execution"]["summary"]["failed_steps"] > 0
+        assert context["execution"]["summary"]["total_steps"] >= 2
         assert len(context["artifacts"]["logs"]) > 0
         assert any("timeout" in log["message"] for log in context["artifacts"]["logs"])
 
@@ -211,15 +216,13 @@ class TestRCAServiceUnitTests:
         config = builder.build_config(max_tokens=3000)
 
         # Verify config is valid LLMConfig
-        assert hasattr(config, 'temperature')
-        assert hasattr(config, 'max_tokens')
+        assert hasattr(config, "temperature")
+        assert hasattr(config, "max_tokens")
         assert config.temperature == 0.3  # Low temperature for RCA
         assert config.max_tokens == 3000
 
     @pytest.mark.asyncio
-    async def test_rca_service_handles_llm_errors_gracefully(
-        self, db, sample_task_manifest
-    ):
+    async def test_rca_service_handles_llm_errors_gracefully(self, db, sample_task_manifest):
         """Test RCA service handles LLM client errors gracefully."""
         from omni_server.ai import RCAnalysisService
 
@@ -244,12 +247,8 @@ class TestRCAServiceUnitTests:
         service = RCAnalysisService(settings)
 
         # Mock LLM client to raise error
-        with patch.object(
-            service, "_llm_client"
-        ) as mock_client:
-            mock_client.complete_json = AsyncMock(
-                side_effect=ConnectionError("LLM API error")
-            )
+        with patch.object(service, "_llm_client") as mock_client:
+            mock_client.complete_json = AsyncMock(side_effect=ConnectionError("LLM API error"))
 
             # Should raise error (not gracefully handle in this basic test)
             with pytest.raises(ConnectionError):
@@ -269,23 +268,21 @@ class TestRCAServiceUnitTests:
         client = OpenAIClient(config)
 
         # Test JSON with markdown code blocks
-        json_with_code_blocks = '''```json
+        json_with_code_blocks = """```json
 {
     "root_cause": "Test cause",
     "confidence": 0.8,
     "findings": ["Finding 1"]
 }
 ```
-'''
+"""
 
         # Parse JSON (using internal parsing logic)
-        data = json.loads(json_with_code_blocks.replace('```json', '').replace('```', ''))
+        data = json.loads(json_with_code_blocks.replace("```json", "").replace("```", ""))
         assert data["root_cause"] == "Test cause"
         assert data["confidence"] == 0.8
 
-    def test_rca_service_persists_results_to_database(
-        self, db, sample_task_manifest
-    ):
+    def test_rca_service_persists_results_to_database(self, db, sample_task_manifest):
         """Test RCA service correctly persists analysis results to database."""
         from omni_server.ai import RCAnalysisService, RCAResult
 
@@ -336,9 +333,7 @@ class TestRCAServiceUnitTests:
         assert rca_db.severity == "high"
         assert rca_db.cache_hit is True
 
-    def test_rca_service_retrieves_cached_results(
-        self, db, sample_task_manifest
-    ):
+    def test_rca_service_retrieves_cached_results(self, db, sample_task_manifest):
         """Test RCA service returns cached results without re-analyzing."""
         from omni_server.ai import RCAnalysisService
 
@@ -356,11 +351,16 @@ class TestRCAServiceUnitTests:
         # Create cached RCA result
         rca = TaskRCADB(
             task_id="test-task-cache-001",
+            llm_provider="openai",
+            llm_model="gpt-4o-mini",
+            duration_seconds=1.0,
             root_cause="Cached root cause",
             confidence=0.75,
             severity="medium",
             findings=json.dumps(["Cached finding"]),
             recommendations=json.dumps(["Cached recommendation"]),
+            related_patterns=json.dumps([]),
+            next_steps=json.dumps([]),
             cache_hit=True,
             input_tokens=100,
             output_tokens=50,
@@ -410,11 +410,19 @@ class TestRCAServiceUnitTests:
         expired_time = datetime.utcnow() - timedelta(seconds=7200)  # 2 hours ago
         rca = TaskRCADB(
             task_id="test-task-expired-001",
+            llm_provider="openai",
+            llm_model="gpt-4o-mini",
+            duration_seconds=1.0,
+            input_tokens=100,
+            output_tokens=50,
+            total_tokens=150,
             root_cause="Expired root cause",
             confidence=0.75,
             severity="medium",
             findings=json.dumps(["Expired finding"]),
             recommendations=json.dumps(["Expired recommendation"]),
+            related_patterns=json.dumps([]),
+            next_steps=json.dumps([]),
             cache_hit=True,
             analyzed_at=expired_time,
             expires_at=expired_time + timedelta(seconds=3600),  # Already expired

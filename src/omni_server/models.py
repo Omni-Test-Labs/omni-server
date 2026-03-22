@@ -218,7 +218,9 @@ class TaskRCADB(Base):
     __tablename__ = "task_rca"
 
     id = Column(Integer, primary_key=True, index=True)
-    task_id = Column(String, unique=True, index=True, nullable=False)
+    task_id = Column(
+        String, ForeignKey("task_queue.task_id"), unique=True, index=True, nullable=False
+    )
 
     # Analysis metadata
     analyzed_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
@@ -243,6 +245,9 @@ class TaskRCADB(Base):
     # Caching
     cache_hit = Column(Boolean, default=False, nullable=False)
     expires_at = Column(DateTime, nullable=True)
+
+    # Relationship to task
+    task = relationship("TaskQueueDB", back_populates="rca_result", foreign_keys=[task_id])
 
 
 class TaskDependencyDB(Base):

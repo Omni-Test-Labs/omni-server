@@ -1,4 +1,4 @@
-API integration tests for AI RCA system.
+# API integration tests for AI RCA system.
 
 import json
 from unittest.mock import patch, AsyncMock
@@ -24,8 +24,11 @@ class TestRCAAPIEndpoints:
 
     def test_get_rca_returns_404_for_nonexistent_task(self, client, db):
         """Test GET /tasks/{id}/rca returns 404 for non-existent task."""
-        response = client.get("/api/v1/tasks/nonexistent-task/rca")
-        assert response.status_code == status.HTTP_404_NOT_FOUND
+        with patch("omni_server.api.tasks._settings") as mock_settings:
+            mock_settings.rca_enabled = True
+
+            response = client.get("/api/v1/tasks/nonexistent-task/rca")
+            assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_get_rca_status_returns_503_when_rca_disabled(self, client, db):
         """Test GET /tasks/{id}/rca/status returns 503 when RCA disabled."""
@@ -84,11 +87,19 @@ class TestRCAAPIEndpoints:
             # Create cached RCA result
             rca = TaskRCADB(
                 task_id="test-task-001",
+                llm_provider="openai",
+                llm_model="gpt-4o-mini",
+                duration_seconds=1.5,
+                input_tokens=100,
+                output_tokens=50,
+                total_tokens=150,
                 root_cause="Test root cause",
                 confidence=0.85,
                 severity="high",
                 findings=json.dumps(["Finding 1", "Finding 2"]),
                 recommendations=json.dumps(["Recommendation 1"]),
+                related_patterns=json.dumps([]),
+                next_steps=json.dumps([]),
                 cache_hit=True,
             )
             db.add(rca)
@@ -123,11 +134,16 @@ class TestRCAAPIEndpoints:
                 # Create cached RCA result
                 rca = TaskRCADB(
                     task_id="test-task-001",
+                    llm_provider="openai",
+                    llm_model="gpt-4o-mini",
+                    duration_seconds=1.0,
                     root_cause="Cached root cause",
                     confidence=0.75,
                     severity="medium",
                     findings=json.dumps(["Cached finding"]),
                     recommendations=json.dumps(["Cached recommendation"]),
+                    related_patterns=json.dumps([]),
+                    next_steps=json.dumps([]),
                     cache_hit=True,
                     input_tokens=100,
                     output_tokens=50,
@@ -150,7 +166,9 @@ class TestRCAAPIEndpoints:
                 assert not mock_service.called
 
     @pytest.mark.asyncio
-    async def test_post_rca_calls_llm_when_force_refresh_true(self, client, db, sample_task_manifest):
+    async def test_post_rca_calls_llm_when_force_refresh_true(
+        self, client, db, sample_task_manifest
+    ):
         """Test POST /tasks/{id}/rca calls LLM when force_refresh=True."""
         with patch("omni_server.api.tasks._settings") as mock_settings:
             mock_settings.rca_enabled = True
@@ -185,7 +203,9 @@ class TestRCAAPIEndpoints:
 
             mock_service_instance = _make_sync_mock()
 
-            with patch("omni_server.api.tasks.RCAnalysisService", return_value=mock_service_instance):
+            with patch(
+                "omni_server.api.tasks.RCAnalysisService", return_value=mock_service_instance
+            ):
                 # Create a task
                 task = TaskQueueDB(
                     task_id="test-task-001",
@@ -200,18 +220,28 @@ class TestRCAAPIEndpoints:
                 # Create old cached RCA result
                 rca = TaskRCADB(
                     task_id="test-task-001",
+                    llm_provider="openai",
+                    llm_model="gpt-4o-mini",
+                    duration_seconds=1.0,
+                    input_tokens=100,
+                    output_tokens=50,
+                    total_tokens=150,
                     root_cause="Old cached root cause",
                     confidence=0.7,
                     severity="medium",
                     findings=json.dumps(["Old finding"]),
                     recommendations=json.dumps(["Old recommendation"]),
+                    related_patterns=json.dumps([]),
+                    next_steps=json.dumps([]),
                     cache_hit=True,
                 )
                 db.add(rca)
                 db.commit()
 
                 # Call the API with force_refresh
-                response = client.post("/api/v1/tasks/test-task-001/rca", json={"force_refresh": True})
+                response = client.post(
+                    "/api/v1/tasks/test-task-001/rca", json={"force_refresh": True}
+                )
 
                 # Verify response
                 assert response.status_code == status.HTTP_200_OK

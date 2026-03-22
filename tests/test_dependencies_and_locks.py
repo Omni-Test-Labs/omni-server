@@ -307,7 +307,7 @@ def test_release_device_lock_success(client: TestClient, db_session: Session):
     )
     assert create_response.status_code == 201
 
-    release_response = client.delete("/api/v1/devices/test_device/lock?task_id={task.id}")
+    release_response = client.delete(f"/api/v1/devices/test_device/lock?task_id={task.id}")
     assert release_response.status_code == 200
 
     data = release_response.json()

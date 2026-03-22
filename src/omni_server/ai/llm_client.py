@@ -16,6 +16,8 @@ class LLMConfig:
     base_url: Optional[str] = None  # For alternative providers
     timeout_seconds: int = 30
     max_tokens: int = 4000
+    temperature: float = 0.7  # Temperature for response randomness (0.0-2.0)
+    top_p: float = 1.0  # Nucleus sampling parameter (0.0-1.0)
 
 
 @dataclass

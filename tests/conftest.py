@@ -68,7 +68,9 @@ def test_db_setup():
 @pytest.fixture(scope="function")
 def db() -> Generator[Session, None, None]:
     """Create a fresh database session for each test."""
-    # Create tables first before creating the session
+    # Drop all tables to ensure clean state
+    Base.metadata.drop_all(bind=test_engine)
+    # Create all tables
     Base.metadata.create_all(bind=test_engine)
 
     session = TestingSessionLocal()
@@ -80,14 +82,6 @@ def db() -> Generator[Session, None, None]:
         except Exception:
             pass
     finally:
-        try:
-            session.execute(TaskQueueDB.__table__.delete())
-            session.execute(DeviceHeartbeatDB.__table__.delete())
-            session.execute(UserDB.__table__.delete())
-            session.execute(UserSettingsDB.__table__.delete())
-            session.commit()
-        except Exception:
-            pass
         session.close()
 
 
@@ -128,6 +122,40 @@ def seed_default_roles(db: Session):
         db.commit()
 
     yield
+
+
+@pytest.fixture(scope="function")
+def test_role(db: Session) -> RoleDB:
+    """Get or create a test role for authentication tests."""
+    role = db.query(RoleDB).filter(RoleDB.name == "user").first()
+    if not role:
+        # Create user role if it doesn't exist
+        role = RoleDB(
+            name="user",
+            description="Regular user with limited access",
+            permissions=["read", "create"],
+        )
+        db.add(role)
+        db.commit()
+        db.refresh(role)
+    return role
+
+
+@pytest.fixture(scope="function")
+def test_admin_role(db: Session) -> RoleDB:
+    """Get or create an admin role for authentication tests."""
+    role = db.query(RoleDB).filter(RoleDB.name == "admin").first()
+    if not role:
+        # Create admin role if it doesn't exist
+        role = RoleDB(
+            name="admin",
+            description="Administrator with full access",
+            permissions=["*"],
+        )
+        db.add(role)
+        db.commit()
+        db.refresh(role)
+    return role
 
 
 @pytest.fixture(scope="function")
@@ -263,3 +291,12 @@ def sample_heartbeat():
         "capabilities": {"python": "3.10", "os": "linux"},
         "last_report": "2024-03-18T10:00:00Z",
     }
+
+
+@pytest.fixture
+def auth_service(db: Session):
+    """Create AuthService fixture for tests."""
+    from omni_server.auth.service import AuthService
+    from omni_server.config import Settings
+
+    return AuthService(Settings())
