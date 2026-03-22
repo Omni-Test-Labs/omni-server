@@ -290,6 +290,13 @@ class TestTaskE2E:
         )
         assert assign_response.status_code == 200
 
+        # Step 3.5: Device heartbeat to confirm task assignment
+        assigned_heartbeat = heartbeat.copy()
+        assigned_heartbeat["current_task_id"] = "test_task_with_device"
+        assigned_heartbeat["status"] = "running"
+        assigned_heartbeat["last_report"] = "2026-03-21T00:00:10Z"
+        client.post("/api/v1/devices/test_device_2/heartbeat", json=assigned_heartbeat)
+
         # Step 4: Verify device has assigned task
         device_response = client.get("/api/v1/devices/test_device_2")
         assert device_response.status_code == 200
@@ -324,6 +331,13 @@ class TestTaskE2E:
 
         upload_response = client.post("/api/v1/tasks/test_task_with_device/result", json=result)
         assert upload_response.status_code == 200
+
+        # Device heartbeat to release task
+        idle_heartbeat = heartbeat.copy()
+        idle_heartbeat["current_task_id"] = None
+        idle_heartbeat["status"] = "idle"
+        idle_heartbeat["last_report"] = "2026-03-21T00:01:10Z"
+        client.post("/api/v1/devices/test_device_2/heartbeat", json=idle_heartbeat)
 
         # Verify device status updated
         device_final_response = client.get("/api/v1/devices/test_device_2")
@@ -502,6 +516,13 @@ class TestDeviceTaskIntegration:
         client.post("/api/v1/tasks", json=task_manifest)
         client.put("/api/v1/tasks/test_sync_task/assign", json={"device_id": "test_device_sync"})
 
+        # Device heartbeat to confirm task assignment
+        assigned_heartbeat = heartbeat.copy()
+        assigned_heartbeat["current_task_id"] = "test_sync_task"
+        assigned_heartbeat["status"] = "running"
+        assigned_heartbeat["last_report"] = "2026-03-21T00:00:10Z"
+        client.post("/api/v1/devices/test_device_sync/heartbeat", json=assigned_heartbeat)
+
         device_response = client.get("/api/v1/devices/test_device_sync")
         assert device_response.status_code == 200
         device_data = device_response.json()
@@ -586,7 +607,7 @@ class TestDeviceTaskIntegration:
             "last_report": "2026-03-21T00:00:00Z",
         }
 
-        client.post("/api/v1/devices/test_device_sync/heartbeat", json=heartbeat)
+        client.post("/api/v1/devices/test_device_release/heartbeat", json=heartbeat)
 
         task_manifest = {
             "schema_version": "1.0.0",
@@ -602,6 +623,13 @@ class TestDeviceTaskIntegration:
         client.put(
             "/api/v1/tasks/task_release_test/assign", json={"device_id": "test_device_release"}
         )
+
+        # Device heartbeat to confirm task assignment
+        assigned_heartbeat = heartbeat.copy()
+        assigned_heartbeat["current_task_id"] = "task_release_test"
+        assigned_heartbeat["status"] = "running"
+        assigned_heartbeat["last_report"] = "2026-03-21T00:00:10Z"
+        client.post("/api/v1/devices/test_device_release/heartbeat", json=assigned_heartbeat)
 
         # Device should have assigned task
         device_with_task = client.get("/api/v1/devices/test_device_release")
@@ -636,6 +664,13 @@ class TestDeviceTaskIntegration:
 
         client.post("/api/v1/tasks/task_release_test/result", json=result)
 
+        # Device heartbeat to release task
+        idle_heartbeat = heartbeat.copy()
+        idle_heartbeat["current_task_id"] = None
+        idle_heartbeat["status"] = "idle"
+        idle_heartbeat["last_report"] = "2026-03-21T00:01:10Z"
+        client.post("/api/v1/devices/test_device_release/heartbeat", json=idle_heartbeat)
+
         # Device should be released
         device_released = client.get("/api/v1/devices/test_device_release")
         assert device_released.status_code == 200
@@ -666,7 +701,7 @@ class TestDeviceTaskIntegration:
             "last_report": "2026-03-21T00:00:00Z",
         }
 
-        client.post("/api/v1/devices/test_device_sync/heartbeat", json=heartbeat)
+        client.post("/api/v1/devices/device_multi_task/heartbeat", json=heartbeat)
 
         # Create and execute first task
         task1_manifest = {
@@ -681,6 +716,13 @@ class TestDeviceTaskIntegration:
 
         client.post("/api/v1/tasks", json=task1_manifest)
         client.put("/api/v1/tasks/multi_task_1/assign", json={"device_id": "device_multi_task"})
+
+        # Device heartbeat to confirm task assignment
+        assigned_heartbeat1 = heartbeat.copy()
+        assigned_heartbeat1["current_task_id"] = "multi_task_1"
+        assigned_heartbeat1["status"] = "running"
+        assigned_heartbeat1["last_report"] = "2026-03-21T00:00:10Z"
+        client.post("/api/v1/devices/device_multi_task/heartbeat", json=assigned_heartbeat1)
 
         result1 = {
             "schema_version": "1.0.0",
@@ -709,6 +751,13 @@ class TestDeviceTaskIntegration:
 
         client.post("/api/v1/tasks/multi_task_1/result", json=result1)
 
+        # Device heartbeat to release task
+        idle_heartbeat1 = heartbeat.copy()
+        idle_heartbeat1["current_task_id"] = None
+        idle_heartbeat1["status"] = "idle"
+        idle_heartbeat1["last_report"] = "2026-03-21T00:01:10Z"
+        client.post("/api/v1/devices/device_multi_task/heartbeat", json=idle_heartbeat1)
+
         # Verify device is released
         device_after_task1 = client.get("/api/v1/devices/device_multi_task")
         assert device_after_task1.json()["current_task_id"] is None
@@ -726,6 +775,13 @@ class TestDeviceTaskIntegration:
 
         client.post("/api/v1/tasks", json=task2_manifest)
         client.put("/api/v1/tasks/multi_task_2/assign", json={"device_id": "device_multi_task"})
+
+        # Device heartbeat to confirm task assignment
+        assigned_heartbeat2 = heartbeat.copy()
+        assigned_heartbeat2["current_task_id"] = "multi_task_2"
+        assigned_heartbeat2["status"] = "running"
+        assigned_heartbeat2["last_report"] = "2026-03-21T00:02:10Z"
+        client.post("/api/v1/devices/device_multi_task/heartbeat", json=assigned_heartbeat2)
 
         result2 = {
             "schema_version": "1.0.0",
@@ -753,6 +809,13 @@ class TestDeviceTaskIntegration:
         }
 
         client.post("/api/v1/tasks/multi_task_2/result", json=result2)
+
+        # Device heartbeat to release task
+        idle_heartbeat2 = heartbeat.copy()
+        idle_heartbeat2["current_task_id"] = None
+        idle_heartbeat2["status"] = "idle"
+        idle_heartbeat2["last_report"] = "2026-03-21T00:03:10Z"
+        client.post("/api/v1/devices/device_multi_task/heartbeat", json=idle_heartbeat2)
 
         # Verify device is released again
         device_after_task2 = client.get("/api/v1/devices/device_multi_task")
