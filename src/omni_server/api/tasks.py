@@ -140,10 +140,12 @@ async def get_rca_analysis(
 @router.post("/{task_id}/rca", response_model=dict)
 async def trigger_rca_analysis(
     task_id: str,
-    force_refresh: bool = False,
+    request_data: dict = {},
     db: Session = Depends(get_db),
 ) -> dict:
     """Trigger RCA analysis for a task."""
+    force_refresh = request_data.get("force_refresh", False)
+
     if not _settings.rca_enabled:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

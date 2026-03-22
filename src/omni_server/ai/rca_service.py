@@ -103,7 +103,7 @@ class RCAnalysisService:
         if not self._settings.rca_enabled:
             raise ValueError("RCA analysis is disabled in settings")
 
-        task = db.query(TaskQueueDB).filter(TaskQueueDB.id == task_id).first()
+        task = db.query(TaskQueueDB).filter(TaskQueueDB.task_id == task_id).first()
         if not task:
             raise ValueError(f"Task {task_id} not found")
 
@@ -130,7 +130,7 @@ class RCAnalysisService:
             duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000.0
             result = self._build_result_from_response(response_data, duration_ms)
 
-            self._save_result(db, task_id, result)
+            self._save_result(db, task_id, result, cache_hit=False)
 
             return result
 
@@ -172,9 +172,9 @@ class RCAnalysisService:
     def _build_rca_context(self, extracted: dict[str, Any]) -> RCAContext:
         """Map extracted context to RCAContext."""
         task_info = extracted.get("task", {})
-        device_info = extracted.get("device", {})
-        execution_info = extracted.get("execution", {})
-        artifacts_info = extracted.get("artifacts", {})
+        device_info = extracted.get("device") or {}
+        execution_info = extracted.get("execution") or {}
+        artifacts_info = extracted.get("artifacts") or {}
 
         return RCAContext(
             task_id=task_info.get("id", ""),
@@ -238,6 +238,7 @@ class RCAnalysisService:
         db: Session,
         task_id: str,
         result: RCAResult,
+        cache_hit: bool = False,
     ) -> None:
         """Save or update RCA result in database."""
         rca_db = db.query(TaskRCADB).filter(TaskRCADB.task_id == task_id).first()
@@ -251,11 +252,11 @@ class RCAnalysisService:
             rca_db.analyzed_at = datetime.utcnow()
             rca_db.llm_provider = result.llm_provider
             rca_db.llm_model = result.llm_model
-            rca_db.duration = result.duration_ms / 1000.0
+            rca_db.duration_seconds = result.duration_ms / 1000.0
             rca_db.input_tokens = result.input_tokens
             rca_db.output_tokens = result.output_tokens
             rca_db.total_tokens = result.total_tokens
-            rca_db.cache_hit = True
+            rca_db.cache_hit = cache_hit
             rca_db.expires_at = None
 
         else:
@@ -269,10 +270,12 @@ class RCAnalysisService:
                 analyzed_at=datetime.utcnow(),
                 llm_provider=result.llm_provider,
                 llm_model=result.llm_model,
-                duration=result.duration_ms / 1000.0,
+                duration_seconds=result.duration_ms / 1000.0,
                 input_tokens=result.input_tokens,
                 output_tokens=result.output_tokens,
                 total_tokens=result.total_tokens,
+                related_patterns=json.dumps([]),
+                next_steps=json.dumps([]),
                 cache_hit=True,
             )
             db.add(rca_db)

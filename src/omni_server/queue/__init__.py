@@ -123,7 +123,7 @@ class TaskQueueManager:
 
             if task.status == "failed":
                 config = _config_cache or Settings()
-                if config.auto_rca_on_failure:
+                if config.rca_enabled and config.auto_rca_on_failure:
                     try:
                         loop = asyncio.get_event_loop()
                         if loop.is_running():
