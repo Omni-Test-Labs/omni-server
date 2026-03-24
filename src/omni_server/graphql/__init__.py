@@ -201,7 +201,7 @@ class Subscription:
 
         event_bus = get_event_bus()
         channel = f"tasks:{task_id}" if task_id else "tasks"
-        queue: asyncio.Queue = dict[str, Any] = asyncio.Queue()
+        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
 
         # Register subscription queue with event bus
         await event_bus.subscribe_queue(channel, queue)
