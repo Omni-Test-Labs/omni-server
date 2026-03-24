@@ -1,7 +1,7 @@
 """API package initialization for version 1."""
 
 from fastapi import APIRouter
-from omni_server.api.v1 import tasks, devices, dependencies, websocket, observability, eventsourcing
+from omni_server.api import tasks, devices, dependencies, websocket, observability, eventsourcing
 
 router = APIRouter(prefix="", tags=["api-v1"])
 

@@ -13,7 +13,7 @@ from omni_server.events import get_event_bus, TaskEvent
 from omni_server.models import ExecutionResult, TaskManifest
 from omni_server.queue import TaskQueueManager
 
-router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
+router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 _settings = Settings()
 event_bus = get_event_bus()
