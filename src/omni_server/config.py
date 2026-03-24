@@ -27,7 +27,9 @@ class Settings(BaseSettings):
     max_pending_tasks_per_device: int = 10
 
     # Heartbeats
-    heartbeat_timeout_seconds: int = 300  # 5 minutes
+    heartbeat_timeout_seconds: int = 300
+    heartbeat_retention_days: int = 7
+    heartbeat_cleanup_enabled: bool = True
 
     # JWT Authentication
     jwt_secret_key: str = "change-me-in-production-use-openssl-rand-hex-32"
@@ -45,13 +47,14 @@ class Settings(BaseSettings):
         """Get refresh token expiration in days."""
         return self._refresh_token_expire_days
 
-    # OAuth Configuration
+    # OAuth Configuration (Development use localhost:5173 for frontend callback)
+    # For production, replace with your public domain
     github_client_id: str = ""
     github_client_secret: str = ""
-    github_redirect_uri: str = "http://localhost:3000/auth/github/callback"
+    github_redirect_uri: str = "http://localhost:5173/auth/github/callback"
     gitlab_client_id: str = ""
     gitlab_client_secret: str = ""
-    gitlab_redirect_uri: str = "http://localhost:3000/auth/gitlab/callback"
+    gitlab_redirect_uri: str = "http://localhost:5173/auth/gitlab/callback"
 
     # AI RCA Configuration
     rca_enabled: bool = False

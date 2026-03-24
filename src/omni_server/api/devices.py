@@ -4,9 +4,9 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from omni_server.config import Settings
 from omni_server.database import get_db
 from omni_server.models import (
     DeviceDB,
@@ -18,6 +18,7 @@ from omni_server.models import (
     DeviceUpdate,
     DeviceResponse,
 )
+from omni_server.cleanup.heartbeat import HeartbeatCleanupService
 
 router = APIRouter(prefix="/api/v1/devices", tags=["devices"])
 
@@ -269,3 +270,22 @@ async def receive_heartbeat(
         "device_registered": device is not None,
         "new_capabilities": capabilities_list,
     }
+
+
+@router.get("/heartbeats/stats")
+async def get_heartbeat_stats(
+    db: Session = Depends(get_db),
+) -> dict:
+    """Get heartbeat statistics and database size information."""
+    cleanup_service = HeartbeatCleanupService()
+    return cleanup_service.get_heartbeat_stats(db)
+
+
+@router.post("/heartbeats/cleanup")
+async def cleanup_heartbeats(
+    db: Session = Depends(get_db),
+) -> dict:
+    """Manually trigger heartbeat cleanup."""
+    cleanup_service = HeartbeatCleanupService()
+    result = cleanup_service.cleanup_old_heartbeats(db)
+    return result
