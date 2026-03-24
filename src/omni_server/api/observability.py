@@ -6,7 +6,7 @@ from fastapi import APIRouter, Query
 
 from omni_server.database import get_db
 
-router = APIRouter(prefix="/api/v1/observability", tags=["observability"])
+router = APIRouter(prefix="/observability", tags=["observability"])
 
 
 @router.get("/health")

@@ -10,7 +10,7 @@ from omni_server.database import get_db
 from omni_server.eventstore import EventStore, TaskAggregate, DeviceAggregate
 from omni_server.models import StateEventDB
 
-router = APIRouter(prefix="/api/v1/eventsourcing", tags=["eventsourcing"])
+router = APIRouter(prefix="/eventsourcing", tags=["eventsourcing"])
 
 
 @router.get("/{entity_type}/{entity_id}/history")
