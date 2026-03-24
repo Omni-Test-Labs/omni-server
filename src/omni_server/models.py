@@ -501,6 +501,44 @@ class DeviceTagDB(Base):
     device = relationship("DeviceDB", back_populates="tags")
 
 
+# ============================================
+# Event Sourcing Models (NEW - ARCH-003)
+# ============================================
+
+
+class StateEventDB(Base):
+    """Database model for state transition events (Event Sourcing)."""
+
+    __tablename__ = "state_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    entity_type = Column(String, index=True, nullable=False)  # "task", "device", or "aggregate"
+    entity_id = Column(String, nullable=False)  # The unique identifier of the entity
+    event_type = Column(String, nullable=False)  # "task.created", "task.assigned", "state.changed"
+    from_state = Column(String, nullable=True)  # Previous state (for state change events)
+    to_state = Column(String, nullable=True)  # New state (for state change events)
+    event_data = Column(JSON, nullable=False)  # Additional event payload
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True, nullable=False)
+    version = Column(Integer, nullable=False)  # Entity version for optimistic locking
+    causation_id = Column(String, index=True, nullable=True)  # Pointer to causing event
+    correlation_id = Column(String, index=True, nullable=True)  # For tracing related events
+
+    __table_args__ = (
+        {
+            "mysql_charset": "utf8mb4",
+            "mysql_collate": "utf8mb4_unicode_ci",
+            "comment": "State transition events for event sourcing and state history",
+        },
+    )
+
+    def __repr__(self):
+        return (
+            f"<StateEventDB(id={self.id}, entity_type={self.entity_type}, "
+            f"entity_id={self.entity_id}, event_type={self.event_type}, "
+            f"timestamp={self.timestamp})>"
+        )
+
+
 # Pydantic Schemas for Device Management
 
 
