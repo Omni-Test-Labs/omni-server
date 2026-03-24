@@ -413,6 +413,164 @@ class AppEnvironmentDB(Base):
 
 
 # ============================================
+# Device Management Models (NEW - ARCH-001)
+# ============================================
+
+
+class DeviceDB(Base):
+    """Database model for device master table."""
+
+    __tablename__ = "devices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(String, unique=True, index=True, nullable=False)
+    name = Column(String, nullable=False)  # Device name
+    device_type = Column(String, index=True, nullable=False)  # pc/mobile/iot/server
+    capabilities = Column(JSON, nullable=False)  # Static device capabilities
+    config = Column(JSON, nullable=False)  # Device configuration
+    environment_id = Column(Integer, ForeignKey("app_environments.id"), nullable=True)
+    runner_version = Column(String, nullable=False)  # Current Runner version
+    registered_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    last_heartbeat_at = Column(DateTime, index=True, nullable=True)
+    status = Column(
+        String, index=True, default="offline", nullable=False
+    )  # idle/running/offline/maintenance
+    group_id = Column(Integer, ForeignKey("device_groups.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    capabilities_list = relationship(
+        "DeviceCapabilityDB", back_populates="device", cascade="all, delete-orphan"
+    )
+    tags = relationship("DeviceTagDB", back_populates="device", cascade="all, delete-orphan")
+
+
+class DeviceCapabilityDB(Base):
+    """Database model for device capabilities registry."""
+
+    __tablename__ = "device_capabilities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(
+        String, ForeignKey("devices.device_id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    capability_name = Column(String, index=True, nullable=False)  # gpu, ssh, serial, adb
+    capability_version = Column(String, nullable=True)
+    config = Column(JSON, nullable=False)  # Capability-specific config (e.g., GPU model)
+    enabled = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Index for quick capability lookup
+    __table_args__ = ({"comment": "Device capability registry for precise matching"},)
+
+    # Relationship
+    device = relationship("DeviceDB", back_populates="capabilities_list")
+
+
+class DeviceGroupDB(Base):
+    """Database model for device groups."""
+
+    __tablename__ = "device_groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class DeviceTagDB(Base):
+    """Database model for device tags."""
+
+    __tablename__ = "device_tags"
+
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(
+        String, ForeignKey("devices.device_id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    tag_name = Column(String, nullable=False)  # Tag name (e.g., "gpu", "production")
+    tag_value = Column(String, nullable=True)  # Tag value (e.g., "rtx4090")
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Index for tag search
+    __table_args__ = ({"comment": "Device tags for flexible categorization"},)
+
+    # Relationship
+    device = relationship("DeviceDB", back_populates="tags")
+
+
+# Pydantic Schemas for Device Management
+
+
+class DeviceCapability(BaseModel):
+    """Pydantic model for device capability."""
+
+    name: str
+    version: Optional[str] = None
+    config: dict[str, Any] = {}
+    enabled: bool = True
+
+
+class DeviceTag(BaseModel):
+    """Pydantic model for device tag."""
+
+    tag_name: str
+    tag_value: Optional[str] = None
+
+
+class DeviceCreate(BaseModel):
+    """Pydantic model for creating a device."""
+
+    device_id: str
+    name: str
+    device_type: str  # pc/mobile/iot/server
+    capabilities: dict[str, Any] = {}  # Raw capabilities from heartbeat
+    config: dict[str, Any] = {}
+    environment_id: Optional[int] = None
+    runner_version: str
+    group_id: Optional[int] = None
+    tags: list[DeviceTag] = []
+
+
+class DeviceUpdate(BaseModel):
+    """Pydantic model for updating device metadata."""
+
+    name: Optional[str] = None
+    device_type: Optional[str] = None
+    config: Optional[dict[str, Any]] = None
+    environment_id: Optional[int] = None
+    group_id: Optional[int] = None
+    tags: Optional[list[DeviceTag]] = None
+
+
+class DeviceResponse(BaseModel):
+    """Pydantic model for device response."""
+
+    id: int
+    device_id: str
+    name: str
+    device_type: str
+    capabilities: dict[str, Any]
+    config: dict[str, Any]
+    environment_id: Optional[int]
+    runner_version: str
+    registered_at: str
+    last_heartbeat_at: Optional[str]
+    status: str
+    group_id: Optional[int]
+    created_at: str
+    updated_at: str
+
+    # Include relationships
+    capabilities_list: list[
+        dict[str, Any]
+    ] = []  # Detailed capabilities from device_capabilities table
+    tags: list[DeviceTag] = []
+
+
+# ============================================
 # System Configuration Models
 # ============================================
 
