@@ -61,7 +61,7 @@ def login(
 
 
 @router.get("/oauth/github")
-def github_oauth_redirect(request_url: str) -> dict:
+def github_oauth_redirect(request_url: str | None = None) -> dict:
     """Redirect user to GitHub OAuth page."""
     import urllib.parse
 
@@ -93,7 +93,7 @@ async def github_oauth_callback(
 
 
 @router.get("/oauth/gitlab")
-def gitlab_oauth_redirect(request_url: str) -> dict:
+def gitlab_oauth_redirect(request_url: str | None = None) -> dict:
     """Redirect user to GitLab OAuth page."""
     import urllib.parse
 
