@@ -1,5 +1,5 @@
 """API package initialization."""
 
-from omni_server.api import tasks, devices, dependencies
+from omni_server.api import tasks, devices, dependencies, websocket, observability, eventsourcing
 
-__all__ = ["tasks", "devices", "dependencies"]
+__all__ = ["tasks", "devices", "dependencies", "websocket", "observability", "eventsourcing"]
