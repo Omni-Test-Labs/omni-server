@@ -22,6 +22,9 @@ class EventBus:
         self.clients: Dict[str, Set[WebSocket]] = defaultdict(set)
         self.message_queue: asyncio.Queue = asyncio.Queue()
         self._running = False
+        self._subscribers: Dict[str, Set[asyncio.Queue]] = defaultdict(
+            set
+        )  # For GraphQL subscriptions
 
     async def start(self):
         if self._running:
@@ -48,6 +51,7 @@ class EventBus:
 
         await self.message_queue.put(event)
 
+        # Notify WebSocket clients
         if channel in self.clients:
             disconnected = []
             for ws in self.clients[channel]:
@@ -58,6 +62,23 @@ class EventBus:
 
             for ws in disconnected:
                 await self.disconnect(channel, ws)
+
+        # Notify GraphQL subscription queues
+        if channel in self._subscribers:
+            for queue in list(self._subscribers[channel]):
+                try:
+                    await queue.put(event)
+                except Exception:
+                    self._subscribers[channel].discard(queue)
+
+    async def subscribe_queue(self, channel: str, queue: asyncio.Queue):
+        """Register a queue to receive messages for a channel (for GraphQL subscriptions)."""
+        self._subscribers[channel].add(queue)
+
+    def unsubscribe_queue(self, channel: str, queue: asyncio.Queue):
+        """Unregister a queue from receiving messages for a channel."""
+        if channel in self._subscribers:
+            self._subscribers[channel].discard(queue)
 
     async def subscribe(
         self,

@@ -198,21 +198,27 @@ class Subscription:
     ) -> AsyncGenerator[TaskEvent, None]:
         """Subscribe to task events, optionally filtered by task_id."""
         from omni_server.events import get_event_bus
-        from collections import deque
 
         event_bus = get_event_bus()
         channel = f"tasks:{task_id}" if task_id else "tasks"
-        queue: asyncio.Queue[TaskEvent] = asyncio.Queue()
+        queue: asyncio.Queue = dict[str, Any] = asyncio.Queue()
 
-        # Simple in-memory subscription
-        # In production, this would connect to the event bus properly
+        # Register subscription queue with event bus
+        await event_bus.subscribe_queue(channel, queue)
+
         try:
             while True:
-                # Simulate event emission for demonstration
-                # In real implementation, this would listen to event bus
-                await asyncio.sleep(1)
-                # This is a placeholder - real events would come from event bus
+                event = await queue.get()
+                yield TaskEvent(
+                    event_type=event["message"].get("event_type", "unknown"),
+                    task_id=event["message"].get("task_id", ""),
+                    status=event["message"].get("status", ""),
+                    timestamp=event["timestamp"],
+                    data=event["message"].get("data"),
+                )
         except asyncio.CancelledError:
+            # Cleanup on cancellation
+            event_bus.unsubscribe_queue(channel, queue)
             raise
 
 
