@@ -21,7 +21,7 @@ from omni_server.models import (
 )
 from omni_server.cleanup.heartbeat import HeartbeatCleanupService
 
-router = APIRouter(prefix="/api/v1/devices", tags=["devices"])
+router = APIRouter(prefix="/devices", tags=["devices"])
 
 event_bus = get_event_bus()
 

@@ -15,7 +15,7 @@ from omni_server.models import (
     Base,
 )
 
-router = APIRouter(prefix="/api/v1", tags=["dependencies", "locks"])
+router = APIRouter(prefix="", tags=["dependencies", "locks"])
 
 
 # Request/Response Models

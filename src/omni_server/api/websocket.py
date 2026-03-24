@@ -13,7 +13,7 @@ from omni_server.config import Settings
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/ws")
+router = APIRouter(prefix="/ws")
 
 settings = Settings()
 auth_service = AuthService(settings)
