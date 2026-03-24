@@ -1,8 +1,9 @@
 """API endpoints for task management."""
 
-from typing import Optional
+from typing import Optional, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from omni_server.ai import RCAnalysisService
@@ -14,8 +15,6 @@ from omni_server.queue import TaskQueueManager
 router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
 
 _settings = Settings()
-
-router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
 
 
 @router.get("", response_model=list[dict])
@@ -191,4 +190,168 @@ async def get_rca_status(
     return {
         "rca_enabled": True,
         "rca_available": False,
+    }
+
+
+class TaskResult(BaseModel):
+    task_id: str
+    status: str
+    error: Optional[str] = None
+
+
+class BatchTaskCreateRequest(BaseModel):
+    tasks: list[dict]
+
+
+class BatchTaskCreateResponse(BaseModel):
+    total: int
+    successful: int
+    failed: int
+    results: list[TaskResult]
+
+
+class BatchTaskAssignRequest(BaseModel):
+    assignments: list[dict]
+
+
+class BatchTaskCancelRequest(BaseModel):
+    task_ids: list[str]
+
+
+@router.post("/batch", response_model=BatchTaskCreateResponse)
+async def create_tasks_batch(
+    request: BatchTaskCreateRequest,
+    db: Session = Depends(get_db),
+) -> BatchTaskCreateResponse:
+    """Create multiple tasks in a single request."""
+    results = []
+    successful_count = 0
+    failed_count = 0
+
+    for task_data in request.tasks:
+        try:
+            task = TaskManifest(**task_data)
+        except Exception as e:
+            results.append(
+                TaskResult(
+                    task_id=task_data.get("task_id", "unknown"),
+                    status="failed",
+                    error=f"Invalid task data: {str(e)}",
+                )
+            )
+            failed_count += 1
+            continue
+
+        try:
+            TaskQueueManager.enqueue_task(
+                db=db,
+                task_id=task.task_id,
+                device_binding=task.device_binding,
+                task_manifest=task.model_dump(),
+            )
+            results.append(TaskResult(task_id=task.task_id, status="created", error=None))
+            successful_count += 1
+        except Exception as e:
+            results.append(TaskResult(task_id=task.task_id, status="failed", error=str(e)))
+            failed_count += 1
+
+    return BatchTaskCreateResponse(
+        total=len(request.tasks),
+        successful=successful_count,
+        failed=failed_count,
+        results=results,
+    )
+
+
+@router.post("/assign/batch")
+async def assign_tasks_batch(
+    request: BatchTaskAssignRequest,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Assign multiple tasks to devices in a single request."""
+    results = []
+    successful_count = 0
+    failed_count = 0
+
+    for assignment in request.assignments:
+        task_id = assignment.get("task_id")
+        device_id = assignment.get("device_id")
+
+        if not task_id or not device_id:
+            results.append(
+                {
+                    "task_id": task_id or "unknown",
+                    "status": "failed",
+                    "error": "Missing task_id or device_id",
+                }
+            )
+            failed_count += 1
+            continue
+
+        try:
+            task = TaskQueueManager.assign_task(db, task_id, device_id)
+            if task:
+                results.append(
+                    {
+                        "task_id": task_id,
+                        "status": "assigned",
+                        "device_id": device_id,
+                    }
+                )
+                successful_count += 1
+            else:
+                results.append({"task_id": task_id, "status": "failed", "error": "Task not found"})
+                failed_count += 1
+        except Exception as e:
+            results.append({"task_id": task_id, "status": "failed", "error": str(e)})
+            failed_count += 1
+
+    return {
+        "total": len(request.assignments),
+        "successful": successful_count,
+        "failed": failed_count,
+        "results": results,
+    }
+
+
+@router.post("/cancel/batch")
+async def cancel_tasks_batch(
+    request: BatchTaskCancelRequest,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Cancel multiple tasks in a single request."""
+    results = []
+    successful_count = 0
+    failed_count = 0
+
+    for task_id in request.task_ids:
+        try:
+            task = TaskQueueManager.get_task_by_id(db, task_id)
+            if task and task.status in ["pending", "assigned"]:
+                TaskQueueManager.update_task_status(db, task_id, "cancelled")
+                results.append({"task_id": task_id, "status": "cancelled"})
+                successful_count += 1
+            elif task and task.status == "cancelled":
+                results.append(
+                    {"task_id": task_id, "status": "skipped", "error": "Already cancelled"}
+                )
+                failed_count += 1
+            else:
+                results.append(
+                    {
+                        "task_id": task_id,
+                        "status": "failed",
+                        "error": f"Task in {task.status} state cannot be cancelled",
+                    }
+                )
+                failed_count += 1
+        except Exception as e:
+            results.append({"task_id": task_id, "status": "failed", "error": str(e)})
+            failed_count += 1
+
+    return {
+        "total": len(request.task_ids),
+        "successful": successful_count,
+        "failed": failed_count,
+        "results": results,
     }
