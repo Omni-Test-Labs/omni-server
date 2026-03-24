@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from omni_server.database import init_db
 from omni_server.config import Settings
 
-from omni_server.api import tasks, devices, dependencies
+from omni_server.api import tasks, devices, dependencies, websocket
 from omni_server.auth.routes import router as auth_router
 from omni_server.admin.users.routes import router as users_router, audit_router
 
@@ -17,14 +17,20 @@ settings = Settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize database on startup."""
+    """Initialize database and event bus on startup."""
     init_db()
 
     from omni_server.queue import init_rca_config, _config_cache as queue_config_cache
+    from omni_server.events import get_event_bus
 
     init_rca_config(settings)
 
+    event_bus = get_event_bus()
+    await event_bus.start()
+
     yield
+
+    await event_bus.stop()
 
 
 app = FastAPI(
@@ -45,6 +51,7 @@ app.add_middleware(
 app.include_router(tasks.router)
 app.include_router(dependencies.router)
 app.include_router(devices.router)
+app.include_router(websocket.router)
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(audit_router)

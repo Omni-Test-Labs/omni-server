@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from omni_server.config import Settings
 from omni_server.database import get_db
+from omni_server.events import get_event_bus, DeviceEvent
 from omni_server.models import (
     DeviceDB,
     DeviceHeartbeatDB,
@@ -22,13 +23,19 @@ from omni_server.cleanup.heartbeat import HeartbeatCleanupService
 
 router = APIRouter(prefix="/api/v1/devices", tags=["devices"])
 
+event_bus = get_event_bus()
+
+
+async def publish_device_event(event_type: str, device_id: str, **kwargs):
+    event = DeviceEvent(event_type=event_type, device_id=device_id, **kwargs)
+    await event_bus.publish(f"device:{device_id}", event.model_dump())
+
 
 @router.post("/")
 async def create_device(
     device: DeviceCreate,
     db: Session = Depends(get_db),
 ) -> dict:
-    """Register a new device in the master table."""
     existing = db.query(DeviceDB).filter(DeviceDB.device_id == device.device_id).first()
 
     if existing:
@@ -63,6 +70,14 @@ async def create_device(
         db.add(tag_db)
 
     db.commit()
+
+    await publish_device_event(
+        "device.registered",
+        device.device_id,
+        status="offline",
+        runner_version=device.runner_version,
+        capabilities=device.capabilities,
+    )
 
     return {
         "device_id": device.device_id,
@@ -262,6 +277,19 @@ async def receive_heartbeat(
             )
             db.add(cap_db)
             capabilities_list.append(cap_name)
+
+    await publish_device_event(
+        "device.heartbeat",
+        device_id,
+        status=heartbeat.status.value,
+        runner_version=heartbeat.runner_version,
+        capabilities=heartbeat.capabilities,
+        details={
+            "current_task_id": heartbeat.current_task_id,
+            "current_task_progress": heartbeat.current_task_progress,
+            "system_resources": heartbeat.system_resources,
+        },
+    )
 
     db.commit()
 

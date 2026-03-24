@@ -9,12 +9,19 @@ from sqlalchemy.orm import Session
 from omni_server.ai import RCAnalysisService
 from omni_server.config import Settings
 from omni_server.database import get_db
+from omni_server.events import get_event_bus, TaskEvent
 from omni_server.models import ExecutionResult, TaskManifest
 from omni_server.queue import TaskQueueManager
 
 router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
 
 _settings = Settings()
+event_bus = get_event_bus()
+
+
+async def publish_task_event(event_type: str, task_id: str, **kwargs):
+    event = TaskEvent(event_type=event_type, task_id=task_id, **kwargs)
+    await event_bus.publish(f"task:{task_id}", event.model_dump())
 
 
 @router.get("", response_model=list[dict])
@@ -63,12 +70,16 @@ async def create_task(
     task: TaskManifest,
     db: Session = Depends(get_db),
 ) -> dict:
-    """Create a new task in the queue."""
     TaskQueueManager.enqueue_task(
         db=db,
         task_id=task.task_id,
         device_binding=task.device_binding,
         task_manifest=task.model_dump(),
+    )
+    await publish_task_event(
+        "task.created",
+        task.task_id,
+        priority=task.priority.value,
     )
     return {"task_id": task.task_id, "status": "pending"}
 
@@ -79,7 +90,6 @@ async def assign_task(
     assign_request: dict,
     db: Session = Depends(get_db),
 ) -> dict:
-    """Assign a task to a specific device."""
     device_id = assign_request.get("device_id")
     if not device_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="device_id required")
@@ -89,6 +99,13 @@ async def assign_task(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Task not found or not pending"
         )
+
+    await publish_task_event(
+        "task.assigned",
+        task_id,
+        device_id=device_id,
+        status=task.status,
+    )
 
     return {
         "task_id": task.task_id,
@@ -103,10 +120,18 @@ async def record_result(
     result: ExecutionResult,
     db: Session = Depends(get_db),
 ) -> dict:
-    """Record task execution result."""
     task = TaskQueueManager.record_result(db, task_id, result.model_dump())
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    event_type = "task.completed" if task.status == "success" else "task.failed"
+    await publish_task_event(
+        event_type,
+        task_id,
+        status=task.status,
+        device_id=task.assigned_device_id,
+        details={"result": result.model_dump()},
+    )
 
     return {"task_id": task.task_id, "status": task.status}
 
